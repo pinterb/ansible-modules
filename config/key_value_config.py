@@ -149,9 +149,9 @@ def main():
             delay=dict(default=0),
             state=dict(default='present', choices=['present', 'absent']),
             key=dict(default=None),
-            value=dict(default=None),
-            supports_check_mode=False
+            value=dict(default=None)
         ),
+        supports_check_mode=False
     )
     
     params = module.params
