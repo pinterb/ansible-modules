@@ -116,7 +116,7 @@ class ConsulKeyValueStore(KeyValueStore):
             current_index = current_data[0]
             current_value_body = current_data[1]
             if current_value_body is None:
-                self.index = current_index
+                self.index = 0
 
             elif self.value == current_value_body['Value']:
                 # Nothing to update; no reason to fail -- so return True
