@@ -21,8 +21,6 @@ class KeyValueStore(object):
         - feh1
         - feh2
     """
-    params = None
-    module = None
     
     def __init__(self, module):
         self.module = module
@@ -31,16 +29,16 @@ class KeyValueStore(object):
     def valid_params(self):
         return True
     
-    def check_if_system_state_would_be_changed():
+    def check_if_system_state_would_be_changed(self):
         return False
     
-    def get():
+    def get(self):
         return (False, False)
 
-    def put():
+    def put(self):
         return (False, False)
 
-    def delete():
+    def delete(self):
         return (False, False)
 
 
@@ -50,15 +48,6 @@ class ConsulKeyValueStore(KeyValueStore):
     Go to http://consul.io to learn more about Consul.
     
     """
-    params = None
-    module = None
-    consul_kvs = None
-    
-    key = None
-    value = None
-    index = None
-    wait = None
-    
     
     def __init__(self, module):
         self.module = module
@@ -72,7 +61,11 @@ class ConsulKeyValueStore(KeyValueStore):
         self.consul_kvs = consul.Consul(host=self.host, port=self.port)
         
     def _valid_key(self):
-        self.key = self.params.key
+        """
+        Validate the key.
+        Any non-zero-length value is currently a valid key.
+        """
+        self.key = self.params['key']
        
         if self.key is None:
             return False
@@ -82,7 +75,11 @@ class ConsulKeyValueStore(KeyValueStore):
         return True
         
     def _valid_value(self):
-        self.value = self.params.value
+        """
+        Validate the value.
+        Any non-zero-length value is currently valid.
+        """
+        self.value = self.params['value']
        
         if self.value is None:
             return False
@@ -94,42 +91,61 @@ class ConsulKeyValueStore(KeyValueStore):
     def valid_params(self):
         return True
     
-    def check_if_system_state_would_be_changed():
+    def check_if_system_state_would_be_changed(self):
         return False
     
-    def get():
-        if not _valid_key():
+    def get(self):
+        if not self._valid_key():
             raise MissingKeyException()
         
-        return consul_kvs.get(self.key)
+        return self.consul_kvs.kv.get(self.key)
     
-    def put():
-        if not _valid_value():
+    def put(self):
+        """
+        Store a key/value into Consul's Key Value endpoint.
+        
+        Existing key/value should result in a no-op.
+        Returns a tuple of booleans: (Success/Failure of Consul put operation, Data changed)
+        """
+        self.value = self.params['value']
+        if not self._valid_value():
             raise MissingValueException()
         
         current_data = self.get()
         if len(current_data):
             current_index = current_data[0]
             current_value_body = current_data[1]
-            if self.value == current_value_body['Value']:
+            if current_value_body is None:
+                self.index = current_index
+
+            elif self.value == current_value_body['Value']:
                 # Nothing to update; no reason to fail -- so return True
                 return (True, False)
             else:
                 # Updates require the Consul ModifyIndex value
                 self.index = current_index
 
-        op_status = consul_kvs.put(self.key, self.value, cas=self.index)
+        op_status = self.consul_kvs.kv.put(self.key, self.value, cas=self.index)
         return (op_status, True)
     
-    def delete():
-        if not _valid_value():
-            raise MissingValueException()
+    def delete(self):
+        """
+        Remove a key/value from Consul's Key Value endpoint.
         
+        Non-existent key should result in a no-op.
+        Returns a tuple of booleans: (Success/Failure of Consul delete operation, Data changed)
+        """
         current_data = self.get()
-        if not len(current_data):
+        if len(current_data):
+            current_index = current_data[0]
+            current_value_body = current_data[1]
+            if current_value_body is None:
+                return (True, False)
+
+        else:
             return (True, False)
         
-        op_status = consul_kvs.delete(self.key)
+        op_status = self.consul_kvs.kv.delete(self.key)
         return (op_status, True)
 
         
@@ -153,7 +169,7 @@ def main():
         ),
         supports_check_mode=False
     )
-    
+
     params = module.params
 
     provider = params['provider']
